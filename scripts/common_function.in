@@ -1,0 +1,39 @@
+#!/bin/bash
+
+#  (C) Copyright [2016] Hewlett Packard Enterprise Development Company, L.P.
+#
+#  This program is free software; you can redistribute it and/or modify
+#  it under the terms of version 2 of the GNU General Public License as
+#  published by the Free Software Foundation.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+#  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to:
+#   Free Software Foundation, Inc.
+#   51 Franklin Street, Fifth Floor
+#   Boston, MA 02110-1301, USA.
+
+# $1: file name
+# $2: search pattern
+function search_string() {
+local   str=
+
+if [ -f $1 ]; then
+        str=`grep "$2" $1`
+fi
+
+echo -e "$str"
+}
+
+# argument 1 ($1): The data to be logged
+function write_log() {
+if [ "$VerboseMode" = "1" ]
+then
+        [ $mode -eq $PassiveDisc ] && echo -e "[`date "+%b %d %T"`] $1" >> $HpiloLogFile || echo -e "$1"
+fi
+}

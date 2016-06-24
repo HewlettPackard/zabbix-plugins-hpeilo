@@ -1,0 +1,651 @@
+#!/usr/bin/env python
+#coding=utf-8
+
+#(C) Copyright [2015] Hewlett-Packard Enterprise Development Company, L.P.
+#
+#  This program is free software; you can redistribute it and/or modify
+#  it under the terms of version 2 of the GNU General Public License as
+#  published by the Free Software Foundation.
+#
+#  This program is distributed in the hope that it will be useful,
+#  but WITHOUT ANY WARRANTY; without even the implied warranty of
+#  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+#
+#  See the GNU General Public License for more details.
+#
+#  You should have received a copy of the GNU General Public License
+#  along with this program; if not, write to:
+#   Free Software Foundation, Inc.
+#   51 Franklin Street, Fifth Floor
+#   Boston, MA 02110-1301, USA.
+
+import json
+import urllib2
+from urllib2 import URLError 
+import sys
+from datetime import datetime
+import os
+from ctypes import *
+import getopt
+
+global HOSTIP
+HOSTIP = "127.0.0.1"
+
+DEFAULT_ITEM_DELAY = 300
+DEFAULT_TEMPLATE_DICT = {
+    "hpeilo": sys.path[0] + "/zabbix_export_templates.xml"
+    }
+
+SUCCESSFUL = 0
+FAILURE = 1
+
+class ZabbixRequestInfo(object):
+    def __init__(self):
+        # based url and required header
+        self.url = "http://" + HOSTIP + "/zabbix/api_jsonrpc.php"
+        self.header = {"Content-Type": "application/json"}
+        
+        libcred = cdll.LoadLibrary(sys.path[0] + '/libilocrst.so')
+        get_cred = libcred.get_cred
+        get_cred.argtypes = [POINTER(c_char)]
+        get_cred.restype = c_char_p
+        host = "zabbix"
+        cred = ""
+        cred = get_cred(host)
+        if not cred:
+                self.write_log('Get Zabbix Server credit error!!')
+                sys.exit(1)
+        zbxcred = cred.split(':')
+        self.user = zbxcred[0]
+        self.password = zbxcred[1]
+        self.auth = ""
+
+        if self.user_login() == FAILURE:
+            sys.exit(1)
+
+    """User
+            Function name  | Available Methods | Comment
+            ---------------------------------------------------------------------
+            login          | user.login        | logging in to the API
+    """
+    def user_login(self):
+        # auth user and password
+        data = json.dumps({
+            "jsonrpc": 2.0,
+            "method": "user.login",
+            "params": {
+                "user": self.user,
+                "password": self.password
+                },
+            "id": 0
+            })
+
+        result, response = self.request(data)
+        if result == SUCCESSFUL:
+            self.auth = response
+        elif 'data' in response:
+            print response['data']
+        return result
+    
+    """Host Group
+            Function name    | Available Methods | Comment
+            ---------------------------------------------------------------------
+            hostgroup_create | hostgroup.create  | creating new host groups
+            hostgroup_delete | hostgroup.delete  | deleting host groups
+            hostgroup_get    | hostgroup.get     | retrieving host groups
+    """
+
+    def hostgroup_create(self, hostgroup_name):
+        if not hostgroup_name:
+            return FAILURE, "Invalid params"
+
+        params = {
+            "name": hostgroup_name
+            }
+
+        result, response = self.request(self.json_data("hostgroup.create", params, 20))
+        if result == SUCCESSFUL:
+            self.write_log('Add Host group: '+ hostgroup_name + ' id: '+ response['groupids'][0])
+        return result, response
+
+    def hostgroup_delete(self, hostgroup_ids):
+        if not hostgroup_ids:
+            return FAILURE, "Invalid params"
+
+        params = hostgroup_ids
+
+        return self.request(self.json_data("hostgroup.delete", params, 21))
+
+    def hostgroup_get(self, hostgroup_name): 
+        if not hostgroup_name:
+            return FAILURE, "Invalid params"
+
+        params = {
+            "output": "extend",
+            "filter": {
+                "name": hostgroup_name
+                }
+            }
+
+        return self.request(self.json_data("hostgroup.get", params, 23))
+
+    """Template
+            Function name    | Available Methods | Comment
+            --------------------------------------------------------------------
+            template_delete  | template.delete   | deleting templates
+            template_get     | template.get      | retrieving templates
+    """
+    def template_delete(self, template_id):
+        if not template_id:
+            return FAILURE, "Invalid params"
+
+        params = template_id
+
+        return self.request(self.json_data("template.delete", params,41 ))
+
+    def template_get(self, templates_list):
+        if not templates_list:
+            return FAILURE, "Invalid params"
+
+        params = {
+            "output": "extend",
+            "filter": {
+                "name":templates_list
+                }
+            }
+
+        return self.request(self.json_data("template.get", params, 42))
+
+    """Item
+            Function name    | Available Methods | Comment
+            --------------------------------------------------------------------
+            item_get         | item.get          | retrieving items 
+            item_update      | item.update       | updating items
+    """
+    def item_get(self, templateids_list):
+        if not templateids_list:
+            return FAILURE, "Invalid params"
+
+        params = {
+            "templateids": templateids_list
+            }
+
+        return self.request(self.json_data("item.get", params, 120))
+
+    def item_update(self, item_id, macro_delay=DEFAULT_ITEM_DELAY):
+        if not item_id:
+            return FAILURE, "Invalid params"
+
+        params = {
+            "itemid": item_id,
+            "delay": macro_delay
+        }
+
+        return self.request(self.json_data("item.update", params, 121))
+
+    """Configuration
+            Function name          | Available Methods      | Comment
+            ------------------------------------------------------------------------------
+            configuration_import   | configuration.import   | importing the configuration
+    """
+    def configuration_import(self, file_path):
+        if not file_path:
+            return FAILURE, "Invalid params"
+
+        try:
+            file = open(file_path, 'rb')
+        except Exception,e:
+            print e
+            return FAILURE, e
+
+        params = {
+            "format": "xml",
+            "rules": {
+                "groups": {
+                    "createMissing": True,
+                    "updateExisting": True
+                    },
+                "hosts": {
+                    "createMissing": True,
+                    "updateExisting": True
+                    },
+                "templates": {
+                    "createMissing": True,
+                    "updateExisting": True
+                    },
+                "applications": {
+                    "createMissing": True,
+                    "updateExisting": True,
+                    },
+                "triggers": {
+                    "createMissing": True,
+                    "updateExisting": True
+                    },
+                "items": {
+                    "createMissing": True,
+                    "updateExisting": True
+                    }
+                },
+            "source": file.read()
+            }
+
+        file.close()
+
+        result, response = self.request(self.json_data("configuration.import", params, 60))
+        if result == FAILURE:
+            self.write_log('Import template: '+ file_path + ' successful')
+        return result, response
+
+    """Host 
+            Function name | Available Methods  | Comment
+            ------------------------------------------------------------------------------
+            host_create   | host.create        | creating new hosts
+            host_delete   | host.delete        | deleting hosts
+            host_update   | host.update        | updating hosts
+    """
+    def host_create(self, host_ip, host, name, hostgroup_ids, template_ids): 
+        if not host_ip or not host or not name or not hostgroup_ids or not template_ids:
+            return FAILURE, "Invalid params"
+
+        hostgroup_list = [{"groupid": hostgroup_id} for hostgroup_id in hostgroup_ids]
+        template_list = [{"templateid": template_id} for template_id in template_ids]
+
+        params = { 
+            "host": host, 
+            "name": name,
+            "interfaces": [{ 
+                "type": 2, # SNMP
+                "main": 1, 
+                "useip": 1, 
+                "ip": host_ip, 
+                "dns": "", 
+                "port": "161" 
+                }], 
+            "description": "http://" + host_ip,
+            "groups": hostgroup_list,
+            "templates": template_list
+            } 
+
+        result, response = self.request(self.json_data("host.create", params, 80))
+        if result == SUCCESSFUL:
+            self.write_log('add Host: '+ name + " id: "+ response['hostids'][0])
+        return result, response
+
+    def host_delete(self, host_ids):
+        if not host_ids:
+            return FAILURE, "Invalid params"
+
+        params = host_ids
+
+        return self.request(self.json_data("host.delete", params, 81))
+
+    def host_update(self, host, host_ip, name, hostgroup_ids, template_ids, host_id):
+        if not host or not host_ip or not name or not hostgroup_ids or not template_ids or not host_id:
+            return FAILURE, "Invalid params"
+
+        hostgroup_list = [{"groupid": hostgroup_id} for hostgroup_id in hostgroup_ids]
+        template_list = [{"templateid": template_id} for template_id in template_ids]
+
+        params = {
+            "host": host,
+            "name": name,
+            "hostid": host_id,
+            "groups": hostgroup_list,
+            "templates": template_list,
+            "description": "http://" + host_ip
+            #"templates_clear": template_list
+            }
+        
+        return self.request(self.json_data("host.update", params, 83))
+    
+    """Host interface
+            Function name        | Available Methods   | Comment
+            ------------------------------------------------------------------------------
+            hostinterface_get   | hostinterface.get   | retrieving host interfaces
+            hostinterface_update| hostinterface.update| updating host interfaces
+    """
+    def hostinterface_get(self, host_id):
+        if not host_id:
+            return FAILURE, "Invalid params"
+
+        params = {
+            "output": "extend",
+            "hostids": host_id
+            }
+
+        return self.request(self.json_data("hostinterface.get", params, 140))
+
+    def hostinterface_update(self, interface_id, host_ip):
+        if not interface_id or not host_ip: 
+            return FAILURE, "Invalid params"
+            
+        params = {
+            "interfaceid": interface_id, 
+            "ip": host_ip
+            }
+
+        return self.request(self.json_data("hostinterface.update", params, 141))
+
+    """User Macro 
+            Function name    | Available Methods  | Comment
+            ------------------------------------------------------------------------------
+            usermacro_create | usermacro.create   | creating new host macros
+            usermacro_get    | usermacro.get      | retrieving host and global macros
+    """
+    def usermacro_create(self, host_id, macro_name, macro_value):
+        if not host_id or not macro_name or not macro_value:
+            return FAILURE, "Invalid params"
+
+        params = {
+            "hostid": host_id,
+            "macro": macro_name,
+            "value": macro_value
+            }
+
+        result, response = self.request(self.json_data("usermacro.create", params, 100))
+        if result == SUCCESSFUL:
+            self.write_log('add Macro: ' + macro_name + ' id:' + response['hostmacroids'][0])
+        return result, response
+
+    def usermacro_get(self, macro_name):
+        if not macro_name:
+            return FAILURE, "Invalid params"
+
+        params = {
+            "output": "extend",
+            "selectGroups": "extend",
+            "filter": {
+                "macro": macro_name
+                }
+            }
+
+        return self.request(self.json_data("usermacro.get", params, 102))
+
+    """Other Function
+    """
+    def json_data(self, method, params, id):
+        data = json.dumps({
+            "jsonrpc": 2.0,
+            "method": method,
+            "params": params, 
+            "auth": self.auth,
+            "id": id
+            })
+        return data
+
+    def request(self, data):
+        request = urllib2.Request(self.url,data)
+        for key in self.header:
+            request.add_header(key, self.header[key])
+        try:
+            result = urllib2.urlopen(request)
+        except urllib2.HTTPError, e:
+            self.write_log('The server couldn\'t fulfill the request, Error code: ' + str(e.code))
+            sys.exit(1)
+        except urllib2.URLError, e:
+            self.write_log('We failed to reach a server.Reason: ' + str(e))
+            print 'We failed to reach a server.Reason: ', str(e)
+            sys.exit(1)
+        else:
+            response = json.loads(result.read())
+            result.close()
+            return self.response_processing(response)
+
+    def response_processing(self, response):
+        if not response:
+            return FAILURE, "API result is empty"
+
+        if 'error' in response:
+            self.response_error(response['error'])
+            return FAILURE, response['error']
+        elif 'result' in response:
+            return SUCCESSFUL, response['result']
+        return FAILURE, "Cannot resolve the results"
+
+    def response_error(self, error):
+        if not error:
+            return 
+        content = 'error'
+        if 'code' in error and error['code'] != '':
+            content = content + ' code: ' + str(error['code'])      
+        if 'message' in error and error['message'] != '':
+            content = content + ' message: ' + error['message']
+        if 'data' in error and error['data'] != '':
+            content = content + ' data: ' + error['data']
+        self.write_log(content)
+
+    def write_log(self, content):
+        file = open(sys.path[0] + "/hpeilo_zabbix_api.log", 'a')
+        file.write('[' + datetime.now().strftime('%Y-%m-%d %H:%M:%S') + ']  ' + content + '\n')
+        file.close()
+
+"""Function
+
+"""
+def hpeilo_plugin_create_template(templates_name, info=''):
+    if info == '':
+        info = ZabbixRequestInfo()
+
+    if not templates_name:
+        print 'Template error: there is no connection template'
+        return RETURN_TYPT['FAILURE']
+    
+    templates_list = list(set([i for i in templates_name.split(',')]))
+    result, response = info.template_get(templates_list)
+    if result == FAILURE:
+        return FAILURE
+    
+    if len(response) < len(templates_list):
+        for res in response:
+            templates_list.remove(res["name"])
+
+        for template in templates_list:
+            if not template in DEFAULT_TEMPLATE_DICT:
+                print 'Template error:', template, 'does not exist'
+                return FAILURE
+            conf_result, conf_response =  info.configuration_import(DEFAULT_TEMPLATE_DICT[template])
+            if conf_result == FAILURE:
+                return FAILURE
+   
+        templates_list = list(set([i for i in templates_name.split(',')]))
+        result, response = info.template_get(templates_list)
+        if result == FAILURE:
+            return FAILURE
+
+    if len(response) == len(templates_list):
+        templateids_list = [res["templateid"] for res in response if "templateid" in res]
+        return templateids_list
+    else:
+        return FAILURE
+
+def hpeilo_plugin_update_items(templateids_list='',item_delay=DEFAULT_ITEM_DELAY,info=''):
+    if info == '':
+        info = ZabbixRequestInfo()
+
+    result, response = info.item_get(templateids_list)
+    if result == FAILURE:
+        return FAILURE
+
+    itemids_list = [item['itemid'] for item in response]
+    for itemid in itemids_list:
+        item_result, item_response = info.item_update(itemid, item_delay)
+        if item_result  == FAILURE:
+            return FAILURE
+    return SUCCESSFUL
+
+def hpeilo_plugin_create_hostgroup(hostgroup_name='', info=''):
+    if info == '':
+        info = ZabbixRequestInfo()
+
+    if hostgroup_name == '':
+        print 'Hostgroup error: there is no connection hostgroup'
+        return FAILURE
+    
+    hostgroup_list = list(set([i for i in hostgroup_name.split(',')]))
+    get_result, get_response = info.hostgroup_get(hostgroup_list)
+    if get_result == FAILURE:
+        return FAILURE
+
+    hostgroupids_list = []
+    for re in get_response:
+        hostgroupids_list.append(re['groupid'])
+        hostgroup_list.remove(re['name'])
+    
+    for hostgroup in hostgroup_list:
+        create_result, create_response = info.hostgroup_create(hostgroup)
+        if create_result == FAILURE:
+            return FAILURE
+        if 'groupids' in create_response:
+            hostgroupids_list.append(str(create_response['groupids'][0]))
+    return hostgroupids_list
+
+def hpeilo_plugin_create_host(host_ip, host_name, hpeilo_value, hostgroup_ids, template_ids, info = ''):
+    if info == '':
+        info = ZabbixRequestInfo()
+
+    host = host_name + ' - ' + hpeilo_value
+    name = host_name + '(' + host_ip +')'
+
+    macroget_result, macroget_response = info.usermacro_get("{$HPEILO}")
+    if macroget_result == FAILURE:
+        return FAILURE
+
+    for response in macroget_response:
+        if response['value'] != hpeilo_value:
+            continue
+        if not 'hostid' in response:
+            continue
+        update_result, update_response = info.host_update(host, host_ip, name, hostgroup_ids, template_ids, response['hostid']) 
+        if update_result == FAILURE:
+            return FAILURE
+        inter_result, inter_response = info.hostinterface_get(response['hostid'])
+        if inter_result == FAILURE:
+            return FAILURE
+        interup_result, interup_response = info.hostinterface_update(inter_response[0]['interfaceid'], host_ip) 
+        if interup_result == FAILURE:
+            return FAILURE
+        return SUCCESSFUL 
+
+    hostcreate_result, hostcreate_response = info.host_create(host_ip, host, name, hostgroup_ids, template_ids)
+    if hostcreate_result == FAILURE:
+        return FAILURE
+    elif 'hostids' in hostcreate_response:
+        return hostcreate_response['hostids'][0]
+    return SUCCESSFUL
+
+def hpeilo_plugin_create_macro(host_id, snmp_com_value, hpeilo_value, info=''):
+    if info == '':
+        info = ZabbixRequestInfo()
+
+    macro_result, macro_respomse = info.usermacro_create(host_id, "{$SNMP_COM}", snmp_com_value)
+    if macro_result == FAILURE:
+        return FAILURE
+    macro_result, macro_respomse = info.usermacro_create(host_id, "{$HPEILO}", hpeilo_value)
+    if macro_result == FAILURE:
+        return FAILURE
+    return SUCCESSFUL
+
+def hpeilo_plugin_create_data(host_ip, host_name, hostgroup_name, template_name, snmp_com_value, hpeilo_value, item_delay, info=''):
+    if info == '':
+        info = ZabbixRequestInfo()
+    
+    # template
+    templateids_list = hpeilo_plugin_create_template(template_name, info)
+    if templateids_list == FAILURE:
+        return FAILURE
+    
+    # item
+    if hpeilo_plugin_update_items(templateids_list, item_delay, info) == FAILURE:
+        return FAILURE
+
+    # hostgroup
+    hostgroupids_list = hpeilo_plugin_create_hostgroup(hostgroup_name, info)
+    if hostgroupids_list == FAILURE:
+        return FAILURE
+    
+    # host
+    host_id = hpeilo_plugin_create_host(host_ip, host_name, hpeilo_value, hostgroupids_list, templateids_list, info)
+    if host_id == FAILURE:
+        return FAILURE
+    elif host_id == SUCCESSFUL:
+        return SUCCESSFUL
+
+    # macro
+    if hpeilo_plugin_create_macro(host_id, snmp_com_value, hpeilo_value, info) == FAILURE:
+        return FAILURE
+    return SUCCESSFUL
+    
+def hpeilo_plugin_delete_data(macro_name='', info=''):
+    if info == '':
+        info = ZabbixRequestInfo()
+
+    result, response = info.usermacro_get(macro_name)
+    if result == FAILURE:
+        return FAILURE
+
+    host_ids = []
+    group_ids = []
+    template_ids = []
+    for result in response:
+        if result['value'] == 'TEMLPATE':
+            template_ids.append(result['hostid'])
+            continue
+        host_ids.append(result['hostid'])
+        for group in result['groups']:
+            if not group['groupid'] in group_ids:
+                group_ids.append(group['groupid'])
+
+    if host_ids:
+        hostdel_result, hostdel_response = info.host_delete(host_ids)
+        if hostdel_result  == FAILURE:
+            return FAILURE
+
+    if group_ids:
+        groupdel_result, group_response = info.hostgroup_delete(group_ids)
+        if groupdel_result == FAILURE:
+            return FAILURE
+
+    if template_ids:
+        tempdel_result, tempdel_response = info.template_delete(template_ids) 
+        if tempdel_result == FAILURE:
+            return FAILURE
+
+    return SUCCESSFUL
+
+def main(argv):
+    if not os.path.isfile('/etc/zabbix/.zabbix_credential.tdb'):
+        print 'Warning:You need to run configuration \'/usr/lib/zabbix/hpeilo_zabbix_config\' script to setup zabbix user name and password'
+        sys.exit(1)
+
+    if len(argv) == 0:
+        sys.exit(0)
+    elif len(argv) > 1:
+        global HOSTIP
+        HOSTIP = argv[1]
+
+    opts = []
+    args = []
+    
+    try:
+        opts, args = getopt.getopt(argv[2:], "CD", ["create", "delete"])
+    except getopt.GetoptError, e:
+        print e
+        sys.exit(1)
+
+    for o, a in opts:
+        if o in ("-C", "--create"):
+            if len(args) != 7:
+                print "Error:Number of parameter error"
+                sys.exit(1)
+            if hpeilo_plugin_create_data(args[0], args[1], args[2], args[3], args[4], args[5], args[6]) == FAILURE:
+                sys.exit(1)
+        if o in ("-D", "--delete"):
+            if len(args) != 1:
+                print "Error:Number of parameter error"
+                sys.exit(1)
+            if hpeilo_plugin_delete_data(args[0]) == FAILURE:
+                sys.exit(1)
+    sys.exit(0)
+    
+if __name__ == "__main__":
+    main(sys.argv)
