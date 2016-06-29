@@ -561,12 +561,12 @@ install-data-hook:
 		cp "$$zabbixserver_conf" "$$zabbixserver_conf".pluginsave; \
 		ESDir=`grep "ExternalScripts=" $$zabbixserver_conf | grep -v "^#"| awk -F= '{print $$2}'`; \
 		if test "x$$ESDir" = "x" ; then \
-			echo 'ExternalScripts=$(prefix)/externalscripts/' >> $$zabbixserver_conf; \
+			echo 'ExternalScripts=$(externalscriptszabbixdir)' >> $$zabbixserver_conf; \
 			modify_conf=1; \
 		fi; \
 		if test "x$$ESDir" != "x" && test "$$ESDir" != "$(externalscriptszabbixdir)" ; then \
 			rm -f "$$ESDir"/hpeilo_snmp_engine; \
-			ln -s $(prefix)/externalscripts/hpeilo_snmp_engine "$$ESDir"/hpeilo_snmp_engine; \
+			ln -s $(externalscriptszabbixdir)/hpeilo_snmp_engine "$$ESDir"/hpeilo_snmp_engine; \
 		fi; \
 		if test "x`grep "^Timeout=" $$zabbixserver_conf`" = "x" ; then \
 			echo "Timeout=20" >> $$zabbixserver_conf; \
@@ -592,12 +592,6 @@ uninstall-hook:
 	else \
 		if test -f "/etc/zabbix/zabbix-server.conf" ; then \
 			zabbixserver_conf=/etc/zabbix/zabbix-server.conf; \
-		fi; \
-	fi; \
-	if test "x$$zabbixserver_conf" != "x" ; then \
-		ESDir=`grep "ExternalScripts=" $$zabbixserver_conf | grep -v "^#"| awk -F= '{print $$2}'`; \
-		if test "x$$ESDir" != "x" && test "$$ESDir" != "$(externalscriptszabbixdir)" ; then \
-			rm -f "$$ESDir"/hpeilo_snmp_engine; \
 		fi; \
 	fi; \
 	if test -f "$$zabbixserver_conf".pluginsave ; then \
