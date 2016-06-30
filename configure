@@ -2900,6 +2900,7 @@ am__tar='$${TAR-tar} chof - "$$tardir"' am__untar='$${TAR-tar} xf -'
 
 
 
+AM_LIBTOOLFLAGS=--silent
 
 # ===========================================================================
 #    http://www.gnu.org/software/autoconf-archive/ax_compare_version.html
@@ -15206,7 +15207,7 @@ $as_echo "$ac_cv_lib_netsnmp_snmp_sess_init" >&6; }
 if test "x$ac_cv_lib_netsnmp_snmp_sess_init" = xyes; then :
   LIBS="$LIBS -lnetsnmp"
 else
-  as_fn_error $? "Could not find netsnmp library." "$LINENO" 5
+  as_fn_error $? "Please install net-snmp-devel(on rhel/sles) or libsnmp-dev(on ubuntu)." "$LINENO" 5
 fi
 
 
@@ -15220,6 +15221,20 @@ if eval test \"x\$"$as_ac_Header"\" = x"yes"; then :
 #define `$as_echo "HAVE_$ac_header" | $as_tr_cpp` 1
 _ACEOF
 
+fi
+
+done
+
+for ac_header in tdb.h
+do :
+  ac_fn_c_check_header_mongrel "$LINENO" "tdb.h" "ac_cv_header_tdb_h" "$ac_includes_default"
+if test "x$ac_cv_header_tdb_h" = xyes; then :
+  cat >>confdefs.h <<_ACEOF
+#define HAVE_TDB_H 1
+_ACEOF
+
+else
+  as_fn_error $? "Please install libtdb-devel(on rhel/sles) or libtdb-dev(on ubuntu)." "$LINENO" 5
 fi
 
 done

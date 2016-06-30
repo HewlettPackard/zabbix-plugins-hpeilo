@@ -7,6 +7,7 @@ AC_CONFIG_SRCDIR([src/hpeilo_engine/hpilo_engine.c])
 AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE()
 AC_CONFIG_MACRO_DIR([m4])
+AM_LIBTOOLFLAGS=--silent
 
 m4_include([m4/m4-ax_compare_version.m4])
 
@@ -20,10 +21,11 @@ AC_PROG_LIBTOOL
 LT_INIT
 
 # Checks for libraries.
-AC_CHECK_LIB(netsnmp, snmp_sess_init, [LIBS="$LIBS -lnetsnmp"], [AC_MSG_ERROR(Could not find netsnmp library.)])
+AC_CHECK_LIB(netsnmp, snmp_sess_init, [LIBS="$LIBS -lnetsnmp"], [AC_MSG_ERROR(Please install net-snmp-devel(on rhel/sles) or libsnmp-dev(on ubuntu).)])
 
 # Checks for header files.
 AC_CHECK_HEADERS([stdlib.h string.h unistd.h])
+AC_CHECK_HEADERS([tdb.h],[],[AC_MSG_ERROR(Please install libtdb-devel(on rhel/sles) or libtdb-dev(on ubuntu).)],[])
 
 # Check the nmap utility 
 NMAP_MIN_VERSION=5.20
