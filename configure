@@ -2900,7 +2900,6 @@ am__tar='$${TAR-tar} chof - "$$tardir"' am__untar='$${TAR-tar} xf -'
 
 
 
-AM_LIBTOOLFLAGS=--silent
 
 # ===========================================================================
 #    http://www.gnu.org/software/autoconf-archive/ax_compare_version.html

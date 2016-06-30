@@ -212,6 +212,7 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AUTOMAKE_OPTIONS = foreign
+AM_LIBTOOLFLAGS = --silent
 zabbixdir = $(prefix)/zabbix
 AM_LDFLAGS = -L$(top_srcdir)/src/ilo_credit/.libs/ -lm -lilocrst -ldl -lcrypto
 AM_CPPFLAGS = -I$(top_srcdir)/src/include

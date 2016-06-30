@@ -1,4 +1,5 @@
 AUTOMAKE_OPTIONS=foreign
+AM_LIBTOOLFLAGS=--silent
 zabbixdir=$(prefix)/zabbix
 
 AM_LDFLAGS = -L$(top_srcdir)/src/ilo_credit/.libs/ -lm -lilocrst -ldl -lcrypto

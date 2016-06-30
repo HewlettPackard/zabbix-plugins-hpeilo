@@ -1,5 +1,5 @@
 AM_CPPFLAGS = -I$(top_srcdir)/src/include
-AM_LIBTOOLFLAGS = --quiet
+AM_LIBTOOLFLAGS=--silent
 zabbixdir = ${prefix}/zabbix
 
 lib_LTLIBRARIES = libilocrst.la

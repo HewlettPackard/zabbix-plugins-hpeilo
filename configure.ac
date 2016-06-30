@@ -7,7 +7,6 @@ AC_CONFIG_SRCDIR([src/hpeilo_engine/hpilo_engine.c])
 AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE()
 AC_CONFIG_MACRO_DIR([m4])
-AM_LIBTOOLFLAGS=--silent
 
 m4_include([m4/m4-ax_compare_version.m4])
 
