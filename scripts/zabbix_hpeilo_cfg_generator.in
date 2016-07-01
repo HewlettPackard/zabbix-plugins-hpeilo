@@ -133,7 +133,12 @@ fi
 function snmptrapd_config() {
 # Get the Zabbix status
 /etc/init.d/zabbix-server status &> /dev/null
-[ $? -eq 0 ] && echo -e "\t\t\t[Done]" || echo -e "\t\t\t[Failed]"
+if [ $? -eq 0 ]; then
+        echo -e "\t\t\t[Done]"
+else
+        systemctl status zabbix-server &> /dev/null
+        [ $? -eq 0 ] && echo -e "\t\t\t[Done]" ||echo -e "\t\t\t[Failed]"
+fi
 
 # Check if the Zabbix Server is started.
 if [ $? -ne 0 ]; then
