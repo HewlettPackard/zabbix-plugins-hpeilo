@@ -564,7 +564,7 @@ install-data-hook:
 			echo 'ExternalScripts=$(externalscriptszabbixdir)' >> $$zabbixserver_conf; \
 			modify_conf=1; \
 		fi; \
-		if test "x$$ESDir" != "x" && test "$$ESDir" != "$(externalscriptszabbixdir)" ; then \
+		if test "x$$ESDir" != "x" && test "$$ESDir" != "$(externalscriptszabbixdir)" && test "$$ESDir" != "$(externalscriptszabbixdir)/" ; then \
 			rm -f "$$ESDir"/hpeilo_snmp_engine; \
 			ln -s $(externalscriptszabbixdir)/hpeilo_snmp_engine "$$ESDir"/hpeilo_snmp_engine; \
 		fi; \
